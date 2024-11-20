@@ -6,53 +6,55 @@ public struct ModelConnection<From: ComponentModel, To: ComponentModel> {
 
     let id = UUID()
     var output: OutputHandler<From, To>
-    var environment: @MainActor (From) -> To.Environment
+    var environment: EnvironmentHandler
     var action: ActionHandler<From, To>?
     var setDependencies: (From, inout DependencyValues) -> Void = { _, _ in }
+    
+    public typealias EnvironmentHandler = @MainActor (From, AnyHashable?) -> To.Environment
 
-    public init(output: OutputHandler<From, To>, environment: @MainActor @escaping (From) -> To.Environment) {
+    public init(output: OutputHandler<From, To>, environment: @escaping EnvironmentHandler) {
         self.output = output
         self.environment = environment
     }
 
     public init() where To.Output == Never, From.Environment == To.Environment {
-        self.init(output: .ignore, environment: \.environment)
+        self.init(output: .ignore) { model, _ in model.environment }
     }
     
     public init() where To.Output == Never, From.Environment.Parent == To.Environment {
-        self.init(output: .ignore, environment: \.environment.parent)
+        self.init(output: .ignore) { model, _ in model.environment.parent }
     }
 
-    public init(environment: @MainActor @escaping (From) -> To.Environment) where To.Output == Never {
+    public init(environment: @escaping EnvironmentHandler) where To.Output == Never {
         self.init(output: .ignore, environment: environment)
     }
 
     public init(output: OutputHandler<From, To>) where From.Environment == To.Environment {
-        self.init(output: output, environment: \.environment)
+        self.init(output: output) { model, _ in model.environment }
     }
     
     public init(output: OutputHandler<From, To>) where From.Environment.Parent == To.Environment {
-        self.init(output: output, environment: \.environment.parent)
+        self.init(output: output) { model, _ in model.environment.parent }
     }
     
     public init(output: @escaping (To.Output) -> From.Input) where From.Environment == To.Environment {
-        self.init(output: .input(output), environment: \.environment)
+        self.init(output: .input(output)) { model, _ in model.environment }
     }
     
     public init(output: @escaping (To.Output) -> From.Input) where From.Environment.Parent == To.Environment {
-        self.init(output: .input(output), environment: \.environment.parent)
+        self.init(output: .input(output)) { model, _ in model.environment.parent }
     }
     
-    public init(output: @escaping (To.Output) -> From.Input, environment: @MainActor @escaping (From) -> To.Environment) {
+    public init(output: @escaping (To.Output) -> From.Input, environment: @escaping EnvironmentHandler) {
         self.init(output: .input(output), environment: environment)
     }
 
     public init(_ output: @MainActor @escaping (ConnectionOutputContext<From, To>) async -> Void) where From.Environment == To.Environment {
-        self.init(output: .handle(output), environment: \.environment)
+        self.init(output: .handle(output)) { model, _ in model.environment }
     }
     
     public init(_ output: @MainActor @escaping (ConnectionOutputContext<From, To>) async -> Void) where From.Environment.Parent == To.Environment {
-        self.init(output: .handle(output), environment: \.environment.parent)
+        self.init(output: .handle(output)) { model, _ in model.environment.parent }
     }
 
     @MainActor
@@ -69,7 +71,7 @@ public struct ModelConnection<From: ComponentModel, To: ComponentModel> {
         }
         var childStore = from.scope(
             state: state,
-            environment: self.environment(from.model),
+            environment: self.environment(from.model, id),
             output: self.output
         )
         
@@ -328,7 +330,6 @@ public enum ActionHandler<Parent: ComponentModel, Child: ComponentModel> {
     case input((Child.Action) -> Parent.Input)
     case handle((ConnectionActionContext<Parent, Child>) async -> Void)
 }
-
 
 // ModelConnection
 extension TestStep {

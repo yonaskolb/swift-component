@@ -173,5 +173,16 @@ extension TestStep {
             }
         }
     }
+    
+    // Used for getters
+    /// expect environment to have a keypath set to a value.
+    public func expectEnvironment<Value>(_ keyPath: KeyPath<Model.Environment, Value>, _ value: Value, file: StaticString = #filePath, line: UInt = #line) -> Self {
+        addExpectation(title: "Expect \(keyPath.propertyName ?? "Environment")", file: file, line: line) { context in
+            let currentState = context.model.environment[keyPath: keyPath]
+            if let difference = StateDump.diff(value, currentState) {
+                context.error("Unexpected \(keyPath.propertyName?.quoted ?? "Environment")", diff: difference)
+            }
+        }
+    }
 
 }
